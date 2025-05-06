@@ -11,6 +11,7 @@ client.commands = new Map();
 client.db = db;
 
 (async () => {
+  // ✅ Check database connection on startup
   try {
     const [rows] = await db.query('SELECT 1');
     console.log('🗄️ MySQL connected successfully.');
@@ -19,12 +20,15 @@ client.db = db;
     process.exit(1);
   }
 
+  // ✅ Load slash commands
   await loadCommands(client);
 
+  // ✅ Bot ready
   client.once(Events.ClientReady, () => {
-    console.log(`🤖 UNTV is online as ${client.user.tag}`);
+    console.log(`🤖 UNTV Bot is online as ${client.user.tag}`);
   });
 
+  // ✅ Slash command handler
   client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
@@ -43,5 +47,6 @@ client.db = db;
     }
   });
 
-  client.login(process.env.DISCORD_TOKEN); // ✅ Updated to DISCORD_TOKEN
+  // ✅ Log in to Discord
+  client.login(process.env.DISCORD_TOKEN);
 })();
