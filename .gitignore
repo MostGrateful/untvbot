@@ -6,7 +6,7 @@ node_modules/
 db.js
 
 # Logs
-.log
+
 
 # OS files
 .DS_Store

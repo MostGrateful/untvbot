@@ -12,12 +12,11 @@ client.db = db;
 
 (async () => {
   try {
-    // ✅ Check MySQL connection
     const [rows] = await db.query('SELECT 1');
     console.log('🗄️ MySQL connected successfully.');
   } catch (err) {
     console.error('❌ MySQL connection failed:', err);
-    process.exit(1); // Stop the bot if DB connection fails
+    process.exit(1);
   }
 
   await loadCommands(client);
@@ -44,5 +43,5 @@ client.db = db;
     }
   });
 
-  client.login(process.env.BOT_TOKEN);
+  client.login(process.env.DISCORD_TOKEN); // ✅ Updated to DISCORD_TOKEN
 })();
