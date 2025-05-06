@@ -1,0 +1,13 @@
+{
+  "name": "untv-bot",
+  "version": "1.0.0",
+  "main": "core/index.js",
+  "scripts": {
+    "start": "node .",
+    "deploy": "node utils/deploy-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.0.0",
+    "dotenv": "^16.0.0"
+  }
+}
