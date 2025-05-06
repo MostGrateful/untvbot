@@ -1,15 +1,26 @@
 const { Client, GatewayIntentBits, Events } = require('discord.js');
 const loadCommands = require('../utils/loadCommands');
+const db = require('./db');
 require('dotenv').config();
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
-client.commands = new Map(); // ✅ <-- This prevents the undefined error
+client.commands = new Map();
+client.db = db;
 
 (async () => {
-  const commands = await loadCommands(client); // Loads and registers slash commands
+  try {
+    // ✅ Check MySQL connection
+    const [rows] = await db.query('SELECT 1');
+    console.log('🗄️ MySQL connected successfully.');
+  } catch (err) {
+    console.error('❌ MySQL connection failed:', err);
+    process.exit(1); // Stop the bot if DB connection fails
+  }
+
+  await loadCommands(client);
 
   client.once(Events.ClientReady, () => {
     console.log(`🤖 UNTV is online as ${client.user.tag}`);
@@ -24,7 +35,7 @@ client.commands = new Map(); // ✅ <-- This prevents the undefined error
     try {
       await command.execute(interaction, client);
     } catch (error) {
-      console.error(`❌ Error executing command '${interaction.commandName}':`, error);
+      console.error(`❌ Error in /${interaction.commandName}:`, error);
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ content: '❌ There was an error while executing this command.', ephemeral: true });
       } else {
@@ -35,4 +46,3 @@ client.commands = new Map(); // ✅ <-- This prevents the undefined error
 
   client.login(process.env.BOT_TOKEN);
 })();
-
