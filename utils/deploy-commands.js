@@ -3,21 +3,24 @@ const { REST, Routes } = require('discord.js');
 const loadCommands = require('./loadCommands');
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);
+const guildIds = process.env.GUILD_IDS.split(',').map(id => id.trim());
 
 (async () => {
-  const commands = await loadCommands(); // Loads and prepares command data
+  const commands = await loadCommands();
 
-  try {
-    console.log('🔁 Refreshing global application (/) commands...');
+  for (const guildId of guildIds) {
+    try {
+      console.log(`🔁 Deploying to guild ${guildId}...`);
 
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID), // Global command registration
-      { body: commands }
-    );
+      await rest.put(
+        Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId),
+        { body: commands }
+      );
 
-    console.log(`✅ Successfully reloaded ${commands.length} global slash command(s).`);
-  } catch (error) {
-    console.error('❌ Failed to deploy global slash commands:', error);
+      console.log(`✅ Successfully deployed ${commands.length} commands to guild ${guildId}`);
+    } catch (error) {
+      console.error(`❌ Failed to deploy commands to guild ${guildId}:`, error);
+    }
   }
 })();
 

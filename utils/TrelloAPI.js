@@ -2,7 +2,7 @@ const axios = require('axios');
 require('dotenv').config();
 
 const TRELLO_BASE = 'https://api.trello.com/1';
-const BOARD_ID = 'klNFx3G4'; // Replace if you ever change the board
+const BOARD_ID = 'klNFx3G4';
 
 const auth = {
   key: process.env.TRELLO_API_KEY,
@@ -53,9 +53,33 @@ async function deleteCardByName(name) {
   return false;
 }
 
+async function archiveCardByName(name) {
+  const { data: lists } = await axios.get(`${TRELLO_BASE}/boards/${BOARD_ID}/lists`, { params: auth });
+
+  for (const list of lists) {
+    const { data: cards } = await axios.get(`${TRELLO_BASE}/lists/${list.id}/cards`, { params: auth });
+    const card = cards.find(c => c.name.toLowerCase() === name.toLowerCase());
+    if (card) {
+      await axios.put(`${TRELLO_BASE}/cards/${card.id}/closed`, null, {
+        params: { ...auth, value: true },
+      });
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function getAllCards(boardId) {
+  const { data } = await axios.get(`${TRELLO_BASE}/boards/${boardId}/cards`, { params: auth });
+  return data;
+}
+
 module.exports = {
   getLists,
   getLabels,
   createCard,
   deleteCardByName,
+  archiveCardByName,
+  getAllCards,
 };

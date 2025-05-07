@@ -1,5 +1,13 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { getLists, getLabels, createCard, deleteCardByName } = require('../../utils/TrelloAPI');
+const {
+  getLists,
+  getLabels,
+  createCard,
+  archiveCardByName,
+  getAllCards
+} = require('../../utils/TrelloAPI');
+
+const BOARD_ID = 'klNFx3G4';
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -21,67 +29,90 @@ module.exports = {
     )
     .addStringOption(option =>
       option.setName('category')
-        .setDescription('Admin or Staff')
+        .setDescription('Superadmin, Admin, or Staff')
         .setRequired(true)
         .addChoices(
+          { name: 'Superadmin', value: 'superadmin' },
           { name: 'Admin', value: 'admin' },
           { name: 'Staff', value: 'staff' }
         )
     )
     .addStringOption(option =>
       option.setName('role')
-        .setDescription('Select their role')
+        .setDescription('Enter their staff role (free text)')
         .setRequired(true)
-        .addChoices(
-          { name: 'Director of UNTV', value: 'Director of UNTV' },
-          { name: 'Deputy Director of UNTV', value: 'Deputy Director of UNTV' },
-          { name: 'Chief of Staff', value: 'Chief of Staff' },
-          { name: 'Producer', value: 'Producer' },
-          { name: 'Production Crew', value: 'Production Crew' },
-          { name: 'Editor-In-Chief', value: 'Editor-In-Chief' },
-          { name: 'Editiors', value: 'Editiors' },
-          { name: 'Writer/Reporter', value: 'Writer/Reporter' },
-          { name: 'Graphics Team', value: 'Graphics Team' },
-        )
     ),
 
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
 
     const action = interaction.options.getString('action');
-    const user = interaction.options.getUser('user');
+    const targetUser = interaction.options.getUser('user');
     const category = interaction.options.getString('category').toLowerCase();
-    const role = interaction.options.getString('role');
+    const roleText = interaction.options.getString('role');
+    const commandUser = interaction.user;
 
-    if (action === 'remove') {
-      const removed = await deleteCardByName(user.username);
-      if (removed) {
-        return interaction.editReply(`🗑️ Successfully removed **${user.username}** from Trello.`);
-      } else {
-        return interaction.editReply(`⚠️ No Trello card found for **${user.username}**.`);
-      }
+    // 🚫 Prevent modifying Bot Management
+    if (category === 'bot management') {
+      return interaction.editReply('❌ You cannot add or remove members from **Bot Management** using this command.');
     }
 
-    // Add action
+    // 🔁 Load Trello list and card data
     const lists = await getLists();
-    const labels = await getLabels();
+    const cards = await getAllCards(BOARD_ID);
 
+    const userCard = cards.find(card =>
+      card.name.toLowerCase() === commandUser.username.toLowerCase()
+    );
+
+    const userListId = userCard?.idList;
+    const userListName = Object.entries(lists).find(([, id]) => id === userListId)?.[0];
+
+    const isBotMgmt = userListName === 'bot management';
+    const isSuperadmin = userListName === 'superadmin';
+    const isAdmin = userListName === 'admin';
+
+    // 🔐 Permission enforcement for both ADD and REMOVE
+    if (category === 'superadmin' && !isBotMgmt) {
+      return interaction.editReply('❌ Only **Bot Management** can add or remove Superadmins.');
+    }
+
+    if (category === 'admin' && !(isBotMgmt || isSuperadmin)) {
+      return interaction.editReply('❌ Only **Bot Management** or **Superadmins** can add or remove Admins.');
+    }
+
+    if (category === 'staff' && !(isBotMgmt || isSuperadmin || isAdmin)) {
+      return interaction.editReply('❌ Only **Bot Management**, **Superadmins**, or **Admins** can add or remove Staff.');
+    }
+
+    // 🗑️ Remove = archive card
+    if (action === 'remove') {
+      const removed = await archiveCardByName(targetUser.username);
+      return interaction.editReply(
+        removed
+          ? `📁 Archived **${targetUser.username}**'s card from Trello.`
+          : `⚠️ No Trello card found for **${targetUser.username}**.`
+      );
+    }
+
+    // ➕ Add new card
     const listId = lists[category];
-    const labelId = labels[role.toLowerCase()] || null;
+    const labels = await getLabels();
+    const labelId = labels[roleText.toLowerCase()] || null;
 
-    const description = [
-      `**Roblox Username:** ${user.username}`,
-      `**Discord ID:** ${user.id}`,
+    const desc = [
+      `**Roblox Username:** ${targetUser.username}`,
+      `**Discord ID:** ${targetUser.id}`,
       `**Deaprtment: UNTV:** UNTV`,
-      `**Role:** ${role}`,
+      `**Role:** ${roleText}`,
     ].join('\n');
 
     try {
-      await createCard(listId, user.username, description, labelId);
-      await interaction.editReply(`✅ Added **${user.username}** to the Trello board under **${category.charAt(0).toUpperCase() + category.slice(1)}** with role **${role}**.`);
-    } catch (err) {
-      console.error(err);
-      await interaction.editReply('❌ Failed to create Trello card. Check API credentials and board setup.');
+      await createCard(listId, targetUser.username, desc, labelId);
+      return interaction.editReply(`✅ Added **${targetUser.username}** to Trello under **${category}** with role: **${roleText}**.`);
+    } catch (error) {
+      console.error(error);
+      return interaction.editReply('❌ Failed to create Trello card. Check your API key/token or list setup.');
     }
   },
 };
