@@ -1,47 +1,31 @@
-const { Client, GatewayIntentBits, Events } = require('discord.js');
-const loadCommands = require('../utils/loadCommands');
-const db = require('./db');
+const { Client, Collection, GatewayIntentBits } = require('discord.js');
 require('dotenv').config();
+const loadCommands = require('../utils/loadCommands');
+const loadEvents = require('../utils/loadEvents');
+const db = require('./db');
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
-client.commands = new Map();
+// Make DB + commands available to all commands
 client.db = db;
+client.commands = new Collection();
 
 (async () => {
-  try {
-    const [rows] = await db.query('SELECT 1');
-    console.log('🗄️ MySQL connected successfully.');
-  } catch (err) {
-    console.error('❌ MySQL connection failed:', err);
-    process.exit(1);
-  }
+  // Load commands
+  const commands = await loadCommands({ client });
+  console.log(`✅ Loaded ${client.commands.size} commands.`);
 
-  await loadCommands(client);
+  // Load events
+  await loadEvents(client);
 
-  client.once(Events.ClientReady, () => {
-    console.log(`🤖 UNTV Bot is online as ${client.user.tag}`);
-  });
-
-  client.on(Events.InteractionCreate, async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-
-    const command = client.commands.get(interaction.commandName);
-    if (!command) return;
-
-    try {
-      await command.execute(interaction, client);
-    } catch (error) {
-      console.error(`❌ Error in /${interaction.commandName}:`, error);
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: '❌ There was an error while executing this command.', ephemeral: true });
-      } else {
-        await interaction.reply({ content: '❌ There was an error while executing this command.', ephemeral: true });
-      }
-    }
-  });
-
-  client.login(process.env.DISCORD_TOKEN);
+  // Login
+  client.login(process.env.DISCORD_TOKEN).then(() =>
+    console.log(`🤖 Logged in as ${client.user?.tag}`)
+  );
 })();
