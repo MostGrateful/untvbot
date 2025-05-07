@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const {
   getLists,
   getLabels,
@@ -6,6 +6,7 @@ const {
   archiveCardByName,
   getAllCards
 } = require('../../utils/TrelloAPI');
+const sendLogEmbed = require('../../utils/sendLogEmbed');
 
 const BOARD_ID = 'klNFx3G4';
 
@@ -43,21 +44,21 @@ module.exports = {
         .setRequired(true)
     ),
 
-  async execute(interaction) {
+  async execute(interaction, client) {
     await interaction.deferReply({ flags: 64 });
 
+    const db = client.db;
     const action = interaction.options.getString('action');
     const targetUser = interaction.options.getUser('user');
     const category = interaction.options.getString('category').toLowerCase();
     const roleText = interaction.options.getString('role');
     const commandUser = interaction.user;
+    const guildId = interaction.guild.id;
 
-    // 🚫 Prevent modifying Bot Management
     if (category === 'bot management') {
       return interaction.editReply('❌ You cannot add or remove members from **Bot Management** using this command.');
     }
 
-    // 🔁 Load Trello list and card data
     const lists = await getLists();
     const cards = await getAllCards(BOARD_ID);
 
@@ -72,7 +73,6 @@ module.exports = {
     const isSuperadmin = userListName === 'superadmin';
     const isAdmin = userListName === 'admin';
 
-    // 🔐 Permission enforcement for both ADD and REMOVE
     if (category === 'superadmin' && !isBotMgmt) {
       return interaction.editReply('❌ Only **Bot Management** can add or remove Superadmins.');
     }
@@ -85,17 +85,33 @@ module.exports = {
       return interaction.editReply('❌ Only **Bot Management**, **Superadmins**, or **Admins** can add or remove Staff.');
     }
 
-    // 🗑️ Remove = archive card
+    const exists = cards.some(card => card.name.toLowerCase() === targetUser.username.toLowerCase());
+
     if (action === 'remove') {
-      const removed = await archiveCardByName(targetUser.username);
-      return interaction.editReply(
-        removed
-          ? `📁 Archived **${targetUser.username}**'s card from Trello.`
-          : `⚠️ No Trello card found for **${targetUser.username}**.`
-      );
+      if (!exists) {
+        return interaction.editReply(`⚠️ No Trello card found for **${targetUser.username}**. Cannot remove.`);
+      }
+
+      await archiveCardByName(targetUser.username);
+      await interaction.editReply(`📁 Archived **${targetUser.username}** from Trello.`);
+
+      const embed = new EmbedBuilder()
+        .setTitle('📋 Removed Staff Member')
+        .addFields(
+          { name: 'User', value: targetUser.tag, inline: true },
+          { name: 'By', value: commandUser.tag, inline: true },
+          { name: 'Category', value: category, inline: true }
+        )
+        .setColor(0xed4245)
+        .setTimestamp();
+
+      return sendLogEmbed(client, guildId, embed);
     }
 
-    // ➕ Add new card
+    if (exists) {
+      return interaction.editReply(`⚠️ A Trello card for **${targetUser.username}** already exists. Aborting.`);
+    }
+
     const listId = lists[category];
     const labels = await getLabels();
     const labelId = labels[roleText.toLowerCase()] || null;
@@ -109,10 +125,23 @@ module.exports = {
 
     try {
       await createCard(listId, targetUser.username, desc, labelId);
-      return interaction.editReply(`✅ Added **${targetUser.username}** to Trello under **${category}** with role: **${roleText}**.`);
+      await interaction.editReply(`✅ Added **${targetUser.username}** under **${category}**.`);
+
+      const embed = new EmbedBuilder()
+        .setTitle('📋 Added Staff Member')
+        .addFields(
+          { name: 'User', value: targetUser.tag, inline: true },
+          { name: 'By', value: commandUser.tag, inline: true },
+          { name: 'Category', value: category, inline: true },
+          { name: 'Role', value: roleText, inline: true }
+        )
+        .setColor(0x57f287)
+        .setTimestamp();
+
+      return sendLogEmbed(client, guildId, embed);
     } catch (error) {
       console.error(error);
-      return interaction.editReply('❌ Failed to create Trello card. Check your API key/token or list setup.');
+      return interaction.editReply('❌ Failed to create Trello card.');
     }
-  },
+  }
 };
