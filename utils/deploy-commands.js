@@ -1,26 +1,36 @@
-require('dotenv').config();
 const { REST, Routes } = require('discord.js');
+require('dotenv').config();
+
+const { Client, Collection, GatewayIntentBits } = require('discord.js');
 const loadCommands = require('./loadCommands');
 
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds]
+});
+client.commands = new Collection();
+
 const rest = new REST().setToken(process.env.DISCORD_TOKEN);
-const guildIds = process.env.GUILD_IDS.split(',').map(id => id.trim());
 
 (async () => {
-  const commands = await loadCommands();
+  await loadCommands({ client });
 
-  for (const guildId of guildIds) {
-    try {
-      console.log(`🔁 Deploying to guild ${guildId}...`);
+  const commandData = client.commands.map(cmd => cmd.data.toJSON());
 
-      await rest.put(
-        Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId),
-        { body: commands }
-      );
+  try {
+    console.log('🔁 Refreshing application (/) commands...');
 
-      console.log(`✅ Successfully deployed ${commands.length} commands to guild ${guildId}`);
-    } catch (error) {
-      console.error(`❌ Failed to deploy commands to guild ${guildId}:`, error);
-    }
+    // GLOBAL DEPLOY
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commandData }
+    );
+
+    console.log(`✅ Successfully deployed ${commandData.length} global commands.`);
+  } catch (error) {
+    console.error('❌ Failed to deploy commands:', error);
+  } finally {
+    process.exit(0);
   }
 })();
+
 

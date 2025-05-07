@@ -1,34 +1,33 @@
 const fs = require('fs');
 const path = require('path');
 
-module.exports = async function loadCommands(client) {
-  const commandsArray = [];
+module.exports = async function loadCommands({ client }) {
+  const commands = [];
 
-  const commandsPath = path.join(__dirname, '../commands');
-  const commandFolders = fs.readdirSync(commandsPath);
-
-  for (const folder of commandFolders) {
-    const folderPath = path.join(commandsPath, folder);
-    const files = fs.readdirSync(folderPath).filter(file => file.endsWith('.js'));
+  const walk = (dir) => {
+    const files = fs.readdirSync(dir, { withFileTypes: true });
 
     for (const file of files) {
-      const filePath = path.join(folderPath, file);
-      const command = require(filePath);
+      const filePath = path.join(dir, file.name);
 
-      if (command.data && command.execute) {
-        commandsArray.push(command.data.toJSON());
-
-        // ✅ Add this line right here:
-        console.log(`[✔️] Loaded command: ${command.data.name}`);
-
-        if (client) {
-          client.commands.set(command.data.name, command);
+      if (file.isDirectory()) {
+        walk(filePath);
+      } else if (file.name.endsWith('.js')) {
+        const command = require(filePath);
+        if (command?.data && typeof command.execute === 'function') {
+          commands.push(command.data.toJSON());
+          if (client?.commands) {
+            client.commands.set(command.data.name, command);
+            console.log(`[✔️] Loaded command: ${command.data.name}`);
+          }
         }
-      } else {
-        console.warn(`[⚠️] Skipped invalid command: ${filePath}`);
       }
     }
-  }
+  };
 
-  return commandsArray;
+  const commandsPath = path.join(__dirname, '..', 'commands');
+  walk(commandsPath);
+
+  return commands;
 };
+

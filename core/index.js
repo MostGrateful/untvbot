@@ -1,8 +1,9 @@
 const { Client, Collection, GatewayIntentBits } = require('discord.js');
 require('dotenv').config();
+
+const db = require('./db');
 const loadCommands = require('../utils/loadCommands');
 const loadEvents = require('../utils/loadEvents');
-const db = require('./db');
 
 const client = new Client({
   intents: [
@@ -12,20 +13,18 @@ const client = new Client({
   ]
 });
 
-// Make DB + commands available to all commands
+// Attach the database and command collection
 client.db = db;
 client.commands = new Collection();
 
 (async () => {
-  // Load commands
-  const commands = await loadCommands({ client });
-  console.log(`✅ Loaded ${client.commands.size} commands.`);
+  // Load commands with client reference
+  await loadCommands({ client });
 
   // Load events
   await loadEvents(client);
 
-  // Login
-  client.login(process.env.DISCORD_TOKEN).then(() =>
-    console.log(`🤖 Logged in as ${client.user?.tag}`)
-  );
+  // Log in the bot
+  await client.login(process.env.DISCORD_TOKEN);
+  console.log(`🤖 Logged in as ${client.user.tag}`);
 })();
